@@ -4,6 +4,7 @@
 name: ios
 description: Drive an app on an iOS simulator through XCUITest
 params: [app, device, actions, timeout]
+cleanup: true
 runs:
   using: binary
   url: https://github.com/mozership/probe-ios/releases/download/v0.1.0/probe-ios_{os}_{arch}

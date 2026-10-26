@@ -95,7 +95,7 @@ Each entry of `actions` names its action in `name`:
 
 `id` is the key of the result. Without it the action's name is the key.
 
-An action on an element waits for the element to appear, for what is left of `timeout`, and the step fails when it does not.
+An action on an element waits for the element to appear, for what is left of `timeout`, and the step fails when it does not. An entry with a key an action does not take, such as a misspelt `selector`, is refused before the step runs.
 
 ### Selectors
 

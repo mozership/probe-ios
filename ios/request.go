@@ -76,6 +76,9 @@ func Params() []string {
 // runs, so that a mistake in the last one does not leave the app halfway.
 func parseReq(with map[string]any) (*Req, error) {
 	req := &Req{Timeout: DefaultTimeout}
+	if err := checkActionKeys(with["actions"]); err != nil {
+		return nil, err
+	}
 	if err := actionrpc.DecodeParams(with, req); err != nil {
 		return nil, err
 	}
@@ -98,6 +101,35 @@ func parseReq(with map[string]any) (*Req, error) {
 		}
 	}
 	return req, nil
+}
+
+// actionKeys are the keys an entry of actions takes.
+var actionKeys = actionrpc.ParamNames(Action{})
+
+// checkActionKeys refuses a key an entry of actions does not take, such as
+// a misspelt one, which would otherwise go unread.
+func checkActionKeys(v any) error {
+	list, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	for i, e := range list {
+		m, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		var unknown []string
+		for k := range m {
+			if !slices.Contains(actionKeys, k) {
+				unknown = append(unknown, k)
+			}
+		}
+		if len(unknown) > 0 {
+			sort.Strings(unknown)
+			return fmt.Errorf("actions[%d]: an action takes no %s; it takes %s", i, strings.Join(unknown, ", "), strings.Join(actionKeys, ", "))
+		}
+	}
+	return nil
 }
 
 func (a *Action) check() error {

@@ -1,0 +1,75 @@
+# The end-to-end tests: the action built from this checkout drives the
+# Settings app of a booted simulator through Probe. Settings is on every
+# simulator, so there is no app to build. Run it from the repository root,
+# with a simulator booted and probe on PATH:
+#
+#   go build -o e2e/action/probe-ios . && probe e2e/workflow.yml
+#
+# DEVICE names the simulator when more than one is booted.
+name: probe-ios e2e
+
+actions:
+  ios: ./action
+
+vars:
+  device: "{{ DEVICE ?? '' }}"
+  settings: com.apple.Preferences
+  # Settings is launched in English, so that the labels do not depend on
+  # the language the simulator is set to.
+  english: ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+
+jobs:
+# A run of its own starts a runner of its own on the simulator, so this
+# job runs before the others start theirs, and stops it as it ends.
+- name: Failures
+  id: failures
+  steps:
+  - name: An element that is not there fails the step
+    uses: shell
+    with:
+      cmd: |
+        probe e2e/missing.yml
+        echo "exit=$?"
+      timeout: 20m
+    test: |
+      res.stdout contains "exit=3" &&
+      res.stdout contains 'actions[0] tap: no element matches label=No Such Row within'
+
+- name: Settings
+  needs: [failures]
+  steps:
+  # The first step builds the runner when the cache has none, which takes
+  # minutes, and starts it on the simulator.
+  - name: Open General
+    uses: ios
+    timeout: 15m
+    with:
+      app: "{{vars.settings}}"
+      device: "{{vars.device}}"
+      timeout: 1m
+      actions:
+      - name: launch
+        args: "{{vars.english}}"
+      - name: tap
+        selector: com.apple.settings.general
+      - name: wait
+        selector: type=navigationbar identifier=General
+      - name: text
+        id: back
+        selector: type=button identifier=BackButton
+    test: res.code == 0 && res.results.back == "Settings"
+
+  # The next step of the run takes the runner the first one started.
+  - name: Read About
+    uses: ios
+    with:
+      app: "{{vars.settings}}"
+      device: "{{vars.device}}"
+      actions:
+      - name: tap
+        selector: type=button identifier=About
+      - name: wait
+        selector: type=navigationbar identifier=About
+      - name: screenshot
+        id: about
+    test: res.code == 0 && res.filepaths.about endsWith ".png"

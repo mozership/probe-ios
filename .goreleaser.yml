@@ -1,0 +1,23 @@
+version: 2
+builds:
+  # The runner is built from its source on the machine that runs a step,
+  # with that machine's Xcode, so the release is only the Go executable,
+  # cross-compiled here. iOS simulators run on macOS alone.
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+archives:
+  # Probe downloads the executable itself, so it is published unarchived.
+  - formats:
+      - binary
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+checksum:
+  name_template: checksums.txt
+changelog:
+  sort: asc

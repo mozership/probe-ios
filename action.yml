@@ -1,0 +1,10 @@
+# It declares no guard: the action cannot tell what an app will do, so a
+# step that uses it is refused under --read-only or --allow-host unless
+# --allow-action names it. It runs only on macOS, so it has no linux build.
+name: ios
+description: Drive an app on an iOS simulator through XCUITest
+params: [app, device, actions, timeout]
+cleanup: true
+runs:
+  using: binary
+  url: https://github.com/mozership/probe-ios/releases/download/v0.0.0/probe-ios_{os}_{arch}

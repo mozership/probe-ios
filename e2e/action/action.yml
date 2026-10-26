@@ -1,0 +1,12 @@
+# probe-ios built from this checkout, for the e2e workflow. Probe resolves
+# an action before the first job starts, so the executable is built before
+# probe runs:
+#
+#   go build -o e2e/action/probe-ios . && probe e2e/workflow.yml
+name: ios
+description: Drive an app on an iOS simulator through XCUITest
+params: [app, device, actions, timeout]
+cleanup: true
+runs:
+  using: binary
+  path: probe-ios

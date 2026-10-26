@@ -1,0 +1,35 @@
+name: probe-ios missing element
+description: |
+  Taps an element the Settings app does not have, so that e2e/workflow.yml
+  can check the step fails with the reason rather than passes.
+  This workflow is expected to fail with an action error.
+actions:
+  ios: ./action
+vars:
+  device: "{{ DEVICE ?? '' }}"
+jobs:
+- name: Missing element
+  steps:
+  # A fresh runner takes a while over its first launch, which is kept out
+  # of the short timeout of the next step.
+  - name: Launches Settings
+    uses: ios
+    timeout: 15m
+    with:
+      app: com.apple.Preferences
+      device: "{{vars.device}}"
+      actions:
+      - name: launch
+        args: ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+    test: res.code == 0
+
+  - name: Taps an element that is not there
+    uses: ios
+    with:
+      app: com.apple.Preferences
+      device: "{{vars.device}}"
+      timeout: 5s
+      actions:
+      - name: tap
+        selector: label="No Such Row"
+    test: res.code == 0

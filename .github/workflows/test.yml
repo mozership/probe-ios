@@ -1,0 +1,51 @@
+name: Test
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -race ./...
+
+  # The tests above use fakes in place of Xcode and the runner. This one
+  # builds the runner with the image's Xcode and drives the Settings app of a
+  # simulator through Probe, as a workflow would.
+  e2e:
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      PROBE_IOS_CACHE_DIR: ${{ github.workspace }}/.probe-ios
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version-file: go.mod
+      # probe-action installs probe on Linux alone.
+      - run: go install github.com/mozership/probe/cmd/probe@v1.30.0
+      # The runner is built the first time a step needs it, which takes
+      # minutes. The cache key changes with its source, and the action's own
+      # key changes with Xcode, so a stale entry is only built over.
+      - uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: .probe-ios/runner
+          key: probe-ios-runner-${{ runner.os }}-${{ hashFiles('internal/runnersrc/**') }}
+      # The simulator is created on a named runtime and booted by its UDID, as
+      # a simulator picked by name runs the image's default iOS, whose
+      # accessibility tree can change under the test with an image update.
+      - name: Boot a simulator
+        run: |
+          UDID=$(xcrun simctl create e2e "iPhone 17" com.apple.CoreSimulator.SimRuntime.iOS-26-5)
+          xcrun simctl bootstatus "$UDID" -b
+          echo "DEVICE=$UDID" >> "$GITHUB_ENV"
+      - run: go build -o e2e/action/probe-ios .
+      - run: probe e2e/workflow.yml

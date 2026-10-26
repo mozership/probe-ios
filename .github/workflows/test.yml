@@ -47,5 +47,13 @@ jobs:
           UDID=$(xcrun simctl create e2e "iPhone 17" com.apple.CoreSimulator.SimRuntime.iOS-26-5)
           xcrun simctl bootstatus "$UDID" -b
           echo "DEVICE=$UDID" >> "$GITHUB_ENV"
+      # A simulator just booted goes on setting itself up for minutes, and
+      # XCUITest waits for an app to be idle before each query, which took a
+      # minute then. Settings is launched once and left to settle first.
+      - name: Let the simulator settle
+        run: |
+          xcrun simctl launch "$DEVICE" com.apple.Preferences
+          sleep 60
+          xcrun simctl terminate "$DEVICE" com.apple.Preferences
       - run: go build -o e2e/action/probe-ios .
       - run: probe e2e/workflow.yml

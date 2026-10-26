@@ -41,6 +41,12 @@ const (
 	poll = 500 * time.Millisecond
 	// stopWait is how long a runner is given to exit at each stage of Stop.
 	stopWait = 5 * time.Second
+	// shutdownWait is how long a runner that took the shutdown is given to
+	// exit on its own, as it ends its test once the command it is running
+	// is over, which can take XCUITest most of a minute on a slow machine.
+	// A runner that is stopped by force instead can take the simulator
+	// down with it.
+	defaultShutdownWait = time.Minute
 	// tailLines is how much of a runner's log an error shows.
 	tailLines = 20
 )
@@ -237,11 +243,14 @@ func Cleanup(root, runID string) error {
 
 // shutdown asks the runner to end its test, which has xcodebuild exit on
 // its own.
+// shutdownWait is defaultShutdownWait, but for tests.
+var shutdownWait = defaultShutdownWait
+
 func shutdown(s Session) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if _, err := NewClient(s.Port, s.Token).Do(ctx, map[string]any{"cmd": "shutdown"}); err == nil {
-		waitGone(s.PID, stopWait)
+		waitGone(s.PID, shutdownWait)
 	}
 }
 

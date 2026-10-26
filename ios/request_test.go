@@ -117,6 +117,8 @@ func TestParseReqErrors(t *testing.T) {
 		{name: "tap with args", with: action(map[string]any{"name": "tap", "selector": "x", "args": []any{"-a"}}), want: "tap takes no args"},
 		{name: "tap with id", with: action(map[string]any{"name": "tap", "selector": "x", "id": "t"}), want: "returns nothing for id"},
 		{name: "bad selector", with: action(map[string]any{"name": "tap", "selector": "type=knob"}), want: "tap: selector"},
+		{name: "unknown key", with: action(map[string]any{"name": "tap", "selector": "x", "selecter": "y"}), want: "actions[0]: an action takes no selecter; it takes name, id, selector, value, args"},
+		{name: "unknown keys", with: action(map[string]any{"name": "launch", "wait": true, "activity": ".Main"}), want: "actions[0]: an action takes no activity, wait;"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

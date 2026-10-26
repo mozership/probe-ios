@@ -75,7 +75,7 @@ These go directly under `with`.
 | `app` | String | required | The bundle identifier of the app the actions drive |
 | `actions` | List | required | The actions to take, in order. See [Actions](#actions) |
 | `device` | String | the one booted simulator | The simulator, by its name or UDID. It has to be booted. When more than one is booted, it has to be given |
-| `timeout` | Duration string or number of seconds | `30s` | Limit for the actions, from the first to the last. It does not count building the runner or starting it, which the step's own `timeout` bounds |
+| `timeout` | Duration string or number of seconds | `30s` | Limit for the actions, from the first to the last. An action on an element that it runs out on waits up to a minute more for the runner to say why it failed, as XCUITest first waits for the app to be idle, which can take that long on a simulator just booted. It does not count building the runner or starting it, which the step's own `timeout` bounds |
 
 ## Actions
 
@@ -95,7 +95,7 @@ Each entry of `actions` names its action in `name`:
 
 `id` is the key of the result. Without it the action's name is the key.
 
-An action on an element waits for the element to appear, for what is left of `timeout`, and the step fails when it does not.
+An action on an element waits for the element to appear, for what is left of `timeout`, and the step fails when it does not. An entry with a key an action does not take, such as a misspelt `selector`, is refused before the step runs.
 
 ### Selectors
 

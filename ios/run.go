@@ -38,21 +38,42 @@ type Result struct {
 // first that fails. Each action that waits for an element waits for what
 // is left of the step's timeout.
 func runActions(ctx context.Context, c commander, req *Req, res *Res) error {
-	ctx, cancel := context.WithTimeout(ctx, req.Timeout)
+	actx, cancel := context.WithTimeout(ctx, req.Timeout)
 	defer cancel()
 	for i, a := range req.Actions {
-		if err := runAction(ctx, c, req.App, a, res); err != nil {
+		err := actx.Err()
+		if err != nil {
+			err = fmt.Errorf("the step's timeout ran out: %w", err)
+		} else {
+			err = runAction(ctx, actx, c, req.App, a, res)
+		}
+		if err != nil {
 			return fmt.Errorf("actions[%d] %s: %w", i, a.Name, err)
 		}
 	}
 	return nil
 }
 
-func runAction(ctx context.Context, c commander, app string, a *Action, res *Res) error {
+// replyGrace is how long past the deadline of the actions an action on an
+// element waits for the runner to answer. The runner stops waiting for the
+// element before the deadline, but XCUITest first waits for the app to be
+// idle, which took 45 seconds on a simulator just booted in CI, and its
+// answer says why the action failed.
+var replyGrace = time.Minute
+
+// runAction takes one action. actx bounds the actions of the step; ctx is
+// the step's, which an action on an element waits on a little longer.
+func runAction(ctx, actx context.Context, c commander, app string, a *Action, res *Res) error {
 	cmd := map[string]any{"cmd": a.Name, "app": app}
+	dctx := actx
 	if kinds[a.Name].selector {
 		cmd["selector"] = a.selector.wire()
-		cmd["timeout"] = remaining(ctx)
+		cmd["timeout"] = remaining(actx)
+		if d, ok := actx.Deadline(); ok {
+			var cancel context.CancelFunc
+			dctx, cancel = context.WithDeadline(ctx, d.Add(replyGrace))
+			defer cancel()
+		}
 	}
 	if a.Name == "type" {
 		cmd["text"] = a.Value
@@ -63,9 +84,9 @@ func runAction(ctx context.Context, c commander, app string, a *Action, res *Res
 			cmd["args"] = []string{}
 		}
 	}
-	reply, err := c.Do(ctx, cmd)
+	reply, err := c.Do(dctx, cmd)
 	if err != nil {
-		if ctx.Err() != nil {
+		if dctx.Err() != nil {
 			return fmt.Errorf("the step's timeout ran out: %w", err)
 		}
 		return err

@@ -28,6 +28,10 @@ type fakeRunner struct {
 	// commands are the commands the server was sent, by name.
 	commands chan string
 	servers  []*http.Server
+	// exitOnShutdown, when set, has the runner exit that long after it
+	// takes the shutdown, as a runner ends its test once the command it is
+	// running is over.
+	exitOnShutdown time.Duration
 }
 
 func newFakeRunner(t *testing.T) *fakeRunner {
@@ -61,12 +65,12 @@ func (f *fakeRunner) start(s Session, xctestrun, udid, test string) (int, <-chan
 	}()
 	f.t.Cleanup(func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) })
 	if !f.exit {
-		f.serve(s)
+		f.serve(s, cmd.Process.Pid)
 	}
 	return cmd.Process.Pid, exited, nil
 }
 
-func (f *fakeRunner) serve(s Session) {
+func (f *fakeRunner) serve(s Session, pid int) {
 	l, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(s.Port))
 	if err != nil {
 		f.t.Fatal(err)
@@ -93,6 +97,9 @@ func (f *fakeRunner) serve(s Session) {
 			reply(w, map[string]any{"ok": true, "text": "General"})
 		case "shutdown":
 			reply(w, map[string]any{"ok": true})
+			if f.exitOnShutdown > 0 {
+				time.AfterFunc(f.exitOnShutdown, func() { _ = syscall.Kill(-pid, syscall.SIGKILL) })
+			}
 		default:
 			reply(w, map[string]any{"ok": false, "error": "no command named " + name})
 		}
@@ -198,7 +205,16 @@ func TestOpenRunnerThatExits(t *testing.T) {
 	}
 }
 
+func withShutdownWait(t *testing.T, d time.Duration) {
+	t.Helper()
+	old := shutdownWait
+	shutdownWait = d
+	t.Cleanup(func() { shutdownWait = old })
+}
+
 func TestCleanup(t *testing.T) {
+	// The runner takes the shutdown but does not exit, so it is stopped.
+	withShutdownWait(t, 100*time.Millisecond)
 	f := newFakeRunner(t)
 	opts := testOptions(t, f)
 	_, release, err := Open(context.Background(), opts)
@@ -239,7 +255,7 @@ func TestCleanup(t *testing.T) {
 func TestClientErrors(t *testing.T) {
 	f := newFakeRunner(t)
 	s := Session{Port: mustFreePort(t), Token: "secret"}
-	f.serve(s)
+	f.serve(s, 0)
 
 	if err := NewClient(s.Port, "wrong").Health(context.Background()); err == nil || !strings.Contains(err.Error(), "the token does not match") {
 		t.Errorf("Health with a wrong token = %v", err)
@@ -257,4 +273,33 @@ func mustFreePort(t *testing.T) int {
 		t.Fatal(err)
 	}
 	return p
+}
+
+func TestCleanupWaitsForTheRunnerToExit(t *testing.T) {
+	withShutdownWait(t, 10*time.Second)
+	f := newFakeRunner(t)
+	f.exitOnShutdown = 500 * time.Millisecond
+	opts := testOptions(t, f)
+	_, release, err := Open(context.Background(), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	s, err := readSession(filepath.Join(RunDir(opts.Root, opts.RunID), "AAAA.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	start := time.Now()
+	if err := Cleanup(opts.Root, opts.RunID); err != nil {
+		t.Fatal(err)
+	}
+	took := time.Since(start)
+	if alive(s.PID) {
+		t.Error("the runner is still running after the cleanup")
+	}
+	// It waited for the runner to exit on its own, and no longer.
+	if took < 500*time.Millisecond || took > 5*time.Second {
+		t.Errorf("the cleanup took %s, want about the half second the runner took to exit", took)
+	}
 }

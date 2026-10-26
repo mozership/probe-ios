@@ -4,7 +4,6 @@ import XCTest
 // failed.
 struct Reply {
   var body: [String: Any]
-  var shutdown = false
 
   static func success(_ fields: [String: Any] = [:]) -> Reply {
     var body = fields
@@ -103,9 +102,8 @@ final class Commands {
     case "tree":
       return .success(["tree": try application(command).debugDescription])
     case "shutdown":
-      var reply = Reply.success()
-      reply.shutdown = true
-      return reply
+      // Server answers shutdown itself, before it comes here.
+      return .success()
     default:
       throw Failure("no command named \(name)")
     }

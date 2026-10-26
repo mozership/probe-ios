@@ -16,9 +16,15 @@ final class Server {
   private let commands: Commands
   private let queue = DispatchQueue(label: "probe-ios.server")
 
-  // stopped is set on the main actor by the shutdown command, and read by
-  // the loop of the test, which runs there too.
-  private(set) var stopped = false
+  // stopped is set by the shutdown command, as soon as it comes, and read
+  // by the loop of the test on the main actor.
+  private let lock = NSLock()
+  private var stopRequested = false
+  var stopped: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return stopRequested
+  }
 
   init(port: UInt16, token: String, commands: Commands) throws {
     guard let nwPort = NWEndpoint.Port(rawValue: port) else {
@@ -83,12 +89,17 @@ final class Server {
     switch (request.method, request.path) {
     case ("GET", "/health"):
       respond(connection, status: 200, body: ["ok": true])
+    case ("POST", "/command") where Server.isShutdown(request.body):
+      // The shutdown is answered here, not on the main actor, where a
+      // command can keep XCUITest busy for long on a slow machine. The test
+      // ends once that command is over.
+      lock.lock()
+      stopRequested = true
+      lock.unlock()
+      respond(connection, status: 200, body: ["ok": true])
     case ("POST", "/command"):
       Task { @MainActor in
         let reply = self.commands.handle(request.body)
-        if reply.shutdown {
-          self.stopped = true
-        }
         self.respond(connection, status: 200, body: reply.body)
       }
     default:
@@ -111,6 +122,15 @@ final class Server {
       completion: .contentProcessed { _ in
         connection.cancel()
       })
+  }
+
+  private static func isShutdown(_ body: Data) -> Bool {
+    guard let object = try? JSONSerialization.jsonObject(with: body),
+      let command = object as? [String: Any]
+    else {
+      return false
+    }
+    return command["cmd"] as? String == "shutdown"
   }
 
   private static func reason(_ status: Int) -> String {

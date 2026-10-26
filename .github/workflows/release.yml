@@ -24,7 +24,8 @@ jobs:
         uses: mozership/probe-action@831b8b6c6aa0c8a61aa75b58f36a08da5c579e83 # v1.3.0
         with:
           install-only: true
-          version: v1.23.0
+          # cleanup came with v1.27.0: an older probe manifest drops it.
+          version: v1.30.0
           # A run for a tag has a cache of its own, which no later run reads.
           cache: false
       - name: Run GoReleaser

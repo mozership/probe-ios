@@ -56,9 +56,10 @@ func runActions(ctx context.Context, c commander, req *Req, res *Res) error {
 
 // replyGrace is how long past the deadline of the actions an action on an
 // element waits for the runner to answer. The runner stops waiting for the
-// element before the deadline, but XCUITest can take seconds over a query
-// on a slow machine, and its answer says why the action failed.
-var replyGrace = 10 * time.Second
+// element before the deadline, but XCUITest first waits for the app to be
+// idle, which took 45 seconds on a simulator just booted in CI, and its
+// answer says why the action failed.
+var replyGrace = time.Minute
 
 // runAction takes one action. actx bounds the actions of the step; ctx is
 // the step's, which an action on an element waits on a little longer.

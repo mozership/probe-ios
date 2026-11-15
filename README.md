@@ -4,6 +4,8 @@ A [Probe](https://github.com/mozership/probe) action that drives an app on an iO
 
 It runs on macOS alone, with Xcode, an iOS simulator runtime, and a booted simulator.
 
+It is an [external action](https://probe.linyo.ws/guide/concepts/actions#external-actions): Probe downloads it the first time a workflow uses it, and runs the executable whose SHA-256 the `action.yml` at the pinned commit names. It needs Probe v1.27.0 or later, which [calls an action once a run is over](https://probe.linyo.ws/guide/concepts/actions#cleaning-up-after-a-run).
+
 A workflow gives the action a name once, under `actions` at its top, and its steps use the name:
 
 ```yaml
@@ -12,6 +14,10 @@ actions:
 ```
 
 Probe only takes a full 40-character commit SHA there. The notes of each [release](https://github.com/mozership/probe-ios/releases) start with the action and its commit to copy.
+
+## How it works
+
+The first step of a run that uses the action starts the runner on the simulator with `xcodebuild test-without-building`, and sends it each action over HTTP on `127.0.0.1`. The runner finds the element with XCUITest and acts on it.
 
 ## Requirements
 
@@ -22,7 +28,7 @@ Probe only takes a full 40-character commit SHA there. The notes of each [releas
 | A booted simulator | `xcrun simctl boot "iPhone 17"`, or open Simulator.app |
 | The app under test | Installed on the simulator: `xcrun simctl install booted path/to/MyApp.app`. A build for the simulator needs no signing |
 
-The action does not boot the simulator or install the app. Do that in a step of its own, such as a `shell` step, so that a failed boot is not taken for a failed test.
+The action does not boot the simulator or install the app. Do that in a step of its own, such as a [`shell`](https://probe.linyo.ws/reference/actions/shell) step, so that a failed boot is not taken for a failed test.
 
 ## The first run
 
@@ -34,7 +40,7 @@ The first step that uses the action builds the runner, which takes a few minutes
 [WARN]   xcode: Xcode 26.5 / Build version 17E192
 ```
 
-A step has 5 minutes by default, which a first build can run out of, so give the first step a longer `timeout` of its own, beside its `with`. Later steps take the runner from the cache. It is built again once the action or Xcode changes.
+A step has 5 minutes by default, which a first build can run out of, so give the first step a longer [`timeout`](https://probe.linyo.ws/reference/yaml-configuration#steps) of its own, beside its `with`. Later steps take the runner from the cache. It is built again once the action or Xcode changes.
 
 Steps that start at once build it once: the others wait for that build. A build that fails says why, and leaves its log in the cache directory as `last-build.log`.
 
@@ -45,23 +51,28 @@ A simulator runs one runner at a time, so two runs of Probe at once need a simul
 ## Basic Syntax
 
 ```yaml
-steps:
-  - name: Open General
-    uses: ios
-    timeout: 15m
-    with:
-      app: com.apple.Preferences
-      actions:
-        - name: launch
-          args: ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
-        - name: tap
-          selector: com.apple.settings.general
-        - name: wait
-          selector: type=navigationbar identifier=General
-        - name: text
-          id: back
-          selector: type=button identifier=BackButton
-    test: res.code == 0 && res.results.back == "Settings"
+name: Settings
+actions:
+  ios: github.com/mozership/probe-ios@<commit SHA>
+jobs:
+  - name: settings
+    steps:
+      - name: Open General
+        uses: ios
+        timeout: 15m
+        with:
+          app: com.apple.Preferences
+          actions:
+            - name: launch
+              args: ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+            - name: tap
+              selector: com.apple.settings.general
+            - name: wait
+              selector: type=navigationbar identifier=General
+            - name: text
+              id: back
+              selector: type=button identifier=BackButton
+        test: res.code == 0 && res.results.back == "Settings"
 ```
 
 The launch arguments above start the app in English whatever language the simulator is set to, so that the labels a selector names do not change with it.
@@ -118,15 +129,48 @@ selector: type=cell index=2
 
 | Field | Description |
 |-------|-------------|
-| `res.code` | `0` when every action succeeded, `1` otherwise |
+| `res.code` | `0` when every action succeeded |
 | `res.results` | What `text` and `tree` read, by key |
 | `res.filepaths` | The files `screenshot` saved, by key |
 | `res.device` | The UDID of the simulator the actions ran on |
 
+An action that cannot finish fails the step with an action error, which exits the run with status `3`, and there is no `res` to test:
+
+```
+actions[0] tap: no element matches label=No Such Row within 4.5s
+```
+
 ## Cache
 
-The runner is built in `~/Library/Caches/probe-ios`. `PROBE_IOS_CACHE_DIR` puts it elsewhere, such as in a directory a CI job caches.
+The runner is built in `~/Library/Caches/probe-ios`. `PROBE_IOS_CACHE_DIR` puts it elsewhere, such as in a directory a CI job caches. The action names its cache by the Xcode and the runner it builds, so a cache that is out of date is built over, not used.
 
 ## CI
 
-On GitHub Actions, run the steps on a macOS runner, create the simulator on a runtime the image has, and boot it before Probe runs. [.github/workflows/test.yml](.github/workflows/test.yml) does this for the e2e tests of this repository.
+On GitHub Actions, run the steps on a macOS runner, create the simulator on a runtime the image has, and boot it before Probe runs. [probe-action](https://github.com/mozership/probe-action) installs Probe on Linux alone, so the job installs it with `go install`. Keep the cache directory between runs, so that the runner is not built every time:
+
+```yaml
+name: E2E
+on: [pull_request]
+jobs:
+  e2e:
+    runs-on: macos-26
+    env:
+      PROBE_IOS_CACHE_DIR: ${{ github.workspace }}/.probe-ios
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - run: go install github.com/mozership/probe/cmd/probe@latest
+      - uses: actions/cache@v5
+        with:
+          path: .probe-ios/runner
+          key: probe-ios-runner-${{ runner.os }}
+      - name: Boot a simulator
+        run: |
+          UDID=$(xcrun simctl create e2e "iPhone 17" com.apple.CoreSimulator.SimRuntime.iOS-26-5)
+          xcrun simctl bootstatus "$UDID" -b
+      - run: probe e2e.yml
+```
+
+[.github/workflows/test.yml](https://github.com/mozership/probe-ios/blob/main/.github/workflows/test.yml) does this for the e2e tests of this repository.

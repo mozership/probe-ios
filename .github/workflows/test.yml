@@ -30,8 +30,6 @@ jobs:
       - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
           go-version-file: go.mod
-      # probe-action installs probe on Linux alone.
-      - run: go install github.com/mozership/probe/cmd/probe@v1.30.0
       # The runner is built the first time a step needs it, which takes
       # minutes. The cache key changes with its source, and the action's own
       # key changes with Xcode, so a stale entry is only built over.
@@ -56,4 +54,9 @@ jobs:
           sleep 60
           xcrun simctl terminate "$DEVICE" com.apple.Preferences
       - run: go build -o e2e/action/probe-ios .
-      - run: probe e2e/workflow.yml
+      # probe-action puts probe on PATH as well, which e2e/workflow.yml calls
+      # again for e2e/missing.yml.
+      - uses: mozership/probe-action@5bf9b862f45a719fbc97b240c82b74e73ff5f2de # v1.4.0
+        with:
+          path: e2e/workflow.yml
+          version: v1.30.0

@@ -38,7 +38,7 @@ func (f *fakeXcodebuild) exec(ctx context.Context, out io.Writer, dir, name stri
 		return fmt.Errorf("the source was not written to the build's directory: %w", err)
 	}
 	if f.fail {
-		fmt.Fprintln(out, "error: something went wrong")
+		_, _ = fmt.Fprintln(out, "error: something went wrong")
 		return errors.New("exit status 65")
 	}
 	derived := args[slices.Index(args, "-derivedDataPath")+1]
@@ -46,7 +46,7 @@ func (f *fakeXcodebuild) exec(ctx context.Context, out io.Writer, dir, name stri
 	if err := os.MkdirAll(products, 0o755); err != nil {
 		return err
 	}
-	fmt.Fprintln(out, "** TEST BUILD SUCCEEDED **")
+	_, _ = fmt.Fprintln(out, "** TEST BUILD SUCCEEDED **")
 	return os.WriteFile(filepath.Join(products, "ProbeRunner_iphonesimulator26.5-arm64.xctestrun"), []byte("plist"), 0o644)
 }
 

@@ -6,7 +6,7 @@ package main
 import "github.com/mozership/probe-ios/ios"
 
 // version is set at build time.
-var version = "dev"
+var version = "dev" //nolint:unused // set by -X main.version in .goreleaser
 
 func main() {
 	ios.Serve()

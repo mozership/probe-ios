@@ -188,7 +188,7 @@ func build(ctx context.Context, opts Options, dir string) (Runner, error) {
 // architecture, any of which needs a new build.
 func Key(opts Options) (string, error) {
 	h := sha256.New()
-	fmt.Fprintf(h, "format %s\nxcode %s\nsdk %s\narch %s\n", format, opts.Toolchain.Version, opts.Toolchain.SDK, opts.Arch)
+	_, _ = fmt.Fprintf(h, "format %s\nxcode %s\nsdk %s\narch %s\n", format, opts.Toolchain.Version, opts.Toolchain.SDK, opts.Arch)
 	var files []string
 	err := fs.WalkDir(opts.Source, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -208,7 +208,7 @@ func Key(opts Options) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(h, "file %s %d\n", path.Clean(p), len(b))
+		_, _ = fmt.Fprintf(h, "file %s %d\n", path.Clean(p), len(b))
 		h.Write(b)
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16], nil

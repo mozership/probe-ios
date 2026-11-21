@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-func intp(n int) *int { return &n }
-
 func TestParseSelector(t *testing.T) {
 	tests := []struct {
 		in   string
@@ -18,7 +16,7 @@ func TestParseSelector(t *testing.T) {
 		{in: "identifier=login", want: Selector{Identifier: "login"}},
 		{in: "id=login", want: Selector{Identifier: "login"}},
 		{in: `type=button label="Sign in"`, want: Selector{Type: "button", Label: "Sign in"}},
-		{in: "type=Cell index=2", want: Selector{Type: "cell", Index: intp(2)}},
+		{in: "type=Cell index=2", want: Selector{Type: "cell", Index: new(2)}},
 		{in: `label="say \"hi\" \\ bye"`, want: Selector{Label: `say "hi" \ bye`}},
 		{in: `  label=General   type=text  `, want: Selector{Label: "General", Type: "text"}},
 		{in: `label=""`, want: Selector{}},

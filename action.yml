@@ -7,7 +7,7 @@ params: [app, device, actions, timeout]
 cleanup: true
 runs:
   using: binary
-  url: https://github.com/mozership/probe-ios/releases/download/v0.2.2/probe-ios_{os}_{arch}
+  url: https://github.com/mozership/probe-ios/releases/download/v0.2.3/probe-ios_{os}_{arch}
   checksums:
-    darwin_amd64: "b1b92922d4df558caf83ed9309bd33a036aba325429042d013626aff79b3c9d1"
-    darwin_arm64: "bb9110b0bb2cddbc1d1aa283e3c4785feb8ae52730da93fef3d4ae1236ad3e4b"
+    darwin_amd64: "c484a50d953646084c76a7336fe18910186122385f2131a61c77f8ee25f046b8"
+    darwin_arm64: "b53d321f5a9c9c12d688856291e57631ba4e27b7b2355dbf6dea32f9b2d0aa32"
